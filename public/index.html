@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>What's This Flower</title>
+  </head>
+  <body>
+    <h1>What's This Flower</h1>
+    <canvas id="canvas" width="350" height="350"></canvas>
+    <video id="video" autoplay playsinline width="1" height="1"></video>
+    <canvas id="captured_canvas" width="75" height="75"></canvas>
+    <br>
+    <input type="button" value="what's this flower" style=”WIDTH: 200px; HEIGHT: 20px” onclick="specifyFlower()">
+    <input type="text" id="result" value="" style=”WIDTH: 400px; HEIGHT: 40px”>
+    <br>
+    <div id="table" border="3"></div>
+    <script src="webdnn.js"></script>
+    <script src="https://unpkg.com/keras-js@1.0.1"></script>
+    <script>
+    
+    // 変数定義
+    var video = document.getElementById("video");
+
+    var canvas = document.getElementById('canvas');
+    var canvas_width = canvas.width;
+    var canvas_height = canvas.height;
+
+    var captured_canvas = document.getElementById('captured_canvas');
+    var captured_canvas_width = captured_canvas.width;
+    var captured_canvas_height = captured_canvas.height;
+
+    /*
+    var flower_name = ['アサガオ',
+                       'マリーゴールド',   
+                       'タンポポ', 
+                       'パンジー',
+                       'シロツメクサ', 
+                       'ひまわり',                                             
+                       'デイジー',                    
+                       'ムラサキツメクサ',
+                       'ランタナ',           
+                       'ツツジ',                   
+                       'ドクダミ',       
+                       'ヒメジョオン',                 
+                       'オシロイバナ',         
+                       'ハルジオン',  
+                       'サルビア',            
+                       'アヤメ',                     
+                       'カタバミ',
+                       'チューリップ']; 
+    */
+    var flower_name = ['ツツジ',
+                       'デイジー',   
+                       'タンポポ',   
+                       'ハルジオン',   
+                       'ヒメジョオン',   
+                       'ドクダミ',   
+                       'アヤメ',   
+                       'ランタナ',   
+                       'マリーゴールド',   
+                       'オシロイバナ',   
+                       'アサガオ',   
+                       'カタバミ',   
+                       'パンジー',   
+                       'サルビア',   
+                       'ヒマワリ',   
+                       'ムラサキツメクサ',   
+                       'シロツメクサ',   
+                       'チューリップ'];   
+    var flower_table = document.createElement('table');
+    var flower_rows = []
+    flower_rows.push(flower_table.insertRow(-1)); 
+    cell = flower_rows[0].insertCell(-1);
+    cell.appendChild(document.createTextNode("花一覧"));
+    cell.style.backgroundColor = "#ddd";
+    for (let i = 0; i < flower_name.length; i += 1) {
+      flower_rows.push(flower_table.insertRow(-1)); 
+      cell = flower_rows[i + 1].insertCell(-1);
+      cell.appendChild(document.createTextNode(flower_name[i]));
+      cell.style.backgroundColor = "#bbb";
+    }
+    document.getElementById("table").appendChild(flower_table);
+
+    // リアルタイムカメラになるように
+    const medias = {audio : false, video : {
+        facingMode : {exact : "environment"}
+    }};
+
+    // カメラの画像取得のcallback関数、最初の一度しか呼ばれない
+    navigator.mediaDevices = navigator.mediaDevices || ((navigator.mozGetUserMedia || navigator.webkitGetUserMedia) ? {
+    getUserMedia: function(c) {
+      return new Promise(function(y, n) {
+        (navigator.mozGetUserMedia || navigator.webkitGetUserMedia).call(navigator, c, y, n);
+         });
+       }
+    } : null);
+    
+    if (!navigator.mediaDevices) {
+      console.log("getUserMedia() not supported.");
+    }
+    navigator.mediaDevices.getUserMedia(medias).then(function(stream) {
+      //var video = document.querySelector('video');
+      //video.src = window.URL.createObjectURL(stream);
+      //video.onloadedmetadata = function(e) {
+      //  video.play();
+      //};
+      video.srcObject = stream;
+    }).catch(function(err) {
+      console.log(err.name + ": " + err.message);
+    });
+
+    // callback関数
+    setInterval(function(){
+      var ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    }, 1000/30); // 30FPS
+
+
+    // 花特定関数
+    function specifyFlower() {
+      var ctx = canvas.getContext("2d");
+      imgData = ctx.getImageData(0, 0, canvas_width, canvas_height); // 動画を描画されたcanvasのImageDataを取り出す
+      data = imgData.data;
+
+      input_data = new Float32Array(3 * captured_canvas_width * captured_canvas_width);
+      cnt = new Float32Array(captured_canvas_width * captured_canvas_width);
+
+      var captured_ctx = captured_canvas.getContext("2d");
+      captured_imgData = captured_ctx.getImageData(0, 0, captured_canvas.width, captured_canvas.height); // 動画を描画されたcanvasのImageDataを取り出す
+      captured_data = captured_imgData.data;
+    
+      for (let i = 0; i < data.length; i += 4) {
+        idx = i / 4;
+        large_x = idx % canvas_width;
+        large_y = (idx - idx % canvas_width) / canvas_height;
+        small_x = Math.floor(large_x * captured_canvas_width / canvas_width);
+        small_y = Math.floor(large_y * captured_canvas_height / canvas_height);
+
+        cnt[small_x + small_y * captured_canvas_width] = cnt[small_x + small_y * captured_canvas_width] + 1;
+        input_data[(small_x + small_y * captured_canvas_width) * 3] += data[i];
+        input_data[(small_x + small_y * captured_canvas_width) * 3 + 1] += data[i + 1];
+        input_data[(small_x + small_y * captured_canvas_width) * 3 + 2] += data[i + 2];
+
+      }
+      for (let i = 0; i < captured_canvas_width; i += 1) {
+        for (let j = 0; j < captured_canvas_width; j += 1) {
+          input_data[(i + j * captured_canvas_width) * 3] = input_data[(i + j * captured_canvas_width) * 3] / cnt[i + j * captured_canvas_width];
+          input_data[(i + j * captured_canvas_width) * 3 + 1] = input_data[(i + j * captured_canvas_width) * 3 + 1] / cnt[i + j * captured_canvas_width];
+          input_data[(i + j * captured_canvas_width) * 3 + 2] = input_data[(i + j * captured_canvas_width) * 3 + 2] / cnt[i + j * captured_canvas_width];
+
+          captured_data[(i + j * captured_canvas_width) * 4] = input_data[(i + j * captured_canvas_width) * 3];
+          captured_data[(i + j * captured_canvas_width) * 4 + 1] = input_data[(i + j * captured_canvas_width) * 3 + 1];
+          captured_data[(i + j * captured_canvas_width) * 4 + 2] = input_data[(i + j * captured_canvas_width) * 3 + 2];
+
+          captured_data[(i + j * captured_canvas_width) * 4 + 3] = 255;
+        }
+      }
+      captured_ctx.putImageData(captured_imgData, 0, 0);
+      alert("Finished Capturing Camera")
+
+
+      // モデルの読み込み
+      // TODO return抜けてる?
+      WebDNN.load('./flower_webdnn').then(function(webdnn_runner) {
+        let webdnn_input_view = webdnn_runner.getInputViews()[0];
+        let webdnn_output_view = webdnn_runner.getOutputViews()[0];
+
+        WebDNN.Image.getImageArray(captured_canvas, {
+          dstH: captured_canvas.height, dstW: captured_canvas.width,
+          order: WebDNN.Image.Order.HWC,
+          color: WebDNN.Image.Color.RGB,
+          bias: 0,
+          scale: [255, 255, 255]
+        }).then(function(array) {
+          webdnn_input_view.set(array); 
+        }).then(function() {
+          webdnn_runner.run().then(function() {
+            console.log("finish");
+            let p = webdnn_output_view.toActual();
+            flower_idx = WebDNN.Math.argmax(p);
+            console.log('Predicted Label', flower_idx);
+            alert(flower_name[flower_idx]);
+            document.getElementById('result').value = flower_name[flower_idx];
+          });
+        });
+      });
+    }
+    </script>
+  </body>
+</html>
