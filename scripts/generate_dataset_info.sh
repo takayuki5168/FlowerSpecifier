@@ -17,7 +17,7 @@ idx=0
 for train_dir in $train_dirs; do
     files="${train_dir}/*"
     for file in $files; do
-     	echo "${file##*/}" "$idx" >> "${info_file_name}"
+     	echo "${file}" "$idx" >> "${info_file_name}"
     done
     idx=$((idx+1))
 done
@@ -36,7 +36,7 @@ idx=0
 for validation_dir in $validation_dirs; do
     files="${validation_dir}/*"
     for file in $files; do
-     	echo "${file##*/}" "$idx" >> "${info_file_name}"
+     	echo "${file}" "$idx" >> "${info_file_name}"
     done
     idx=$((idx+1))
 done
