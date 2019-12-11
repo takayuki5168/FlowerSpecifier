@@ -1,4 +1,4 @@
-cd ../$(dirname $0)/dataset
+cd $(dirname $0)/../dataset
 
 info_file_name="info.txt"
 
@@ -11,6 +11,7 @@ echo $train_dirs
 # init info.txt
 rm ${info_file_name} -f
 touch ${info_file_name}
+
 
 # write info.txt
 idx=0
