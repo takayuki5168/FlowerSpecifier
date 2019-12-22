@@ -43,9 +43,9 @@ class FlowerClassifier(object):
             transforms.Resize(224),
             transforms.ToTensor()])
         self.train_data = datasets.ImageFolder(root='../dataset/train', transform=data_transform)
-        self.train_data_loader = torch.utils.data.DataLoader(self.train_data, batch_size=50, shuffle=True, num_workers=4)
+        self.train_data_loader = torch.utils.data.DataLoader(self.train_data, batch_size=64, shuffle=True, num_workers=4)
         self.valid_data = datasets.ImageFolder(root='../dataset/validation', transform=data_transform)
-        self.valid_data_loader = torch.utils.data.DataLoader(self.valid_data, batch_size=100, shuffle=True, num_workers=4)
+        self.valid_data_loader = torch.utils.data.DataLoader(self.valid_data, batch_size=64, shuffle=False, num_workers=4)
 
         # init model
         self.model = Model()
@@ -64,32 +64,46 @@ class FlowerClassifier(object):
 
         print_step = 3
         for epoch in range(epochs):
-            running_loss = 0
+            train_loss = 0
+            train_acc = 0
             for i, (inputs, labels) in enumerate(self.train_data_loader):
                 # zero the parameter gradients
                 self.optimizer.zero_grad()
 
                 # forward, backward, optimize
                 outputs = self.model(inputs.cuda().float()) if self.use_gpu else self.model(inputs)
-                loss = self.criterion(outputs, labels.cuda().long()) if self.use_gpu else self.criterion(outputs, labels)
+                loss = self.criterion(outputs.cuda().float(), labels.cuda().long()) if self.use_gpu else self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
+                train_loss += loss.item()
+                acc = (outputs.cuda().float().max(1)[1] == labels.cuda().long()).sum()
+                train_acc += acc
+            avg_train_loss = train_loss / len(self.train_data_loader.dataset)
+            avg_train_acc = train_acc / len(self.train_data_loader.dataset)
 
-                running_loss += loss.item()
-                print(i)
-                if i % print_step == print_step - 1:
+            # valid
+            if True: #epoch % print_step == print_step - 1:
+                with torch.no_grad():
                     valid_loss = 0
+                    valid_acc = 0
                     for j, (inputs, labels) in enumerate(self.valid_data_loader):
-                        self.optimizer.zero_grad()
+                        #self.optimizer.zero_grad()
                         outputs = self.model(inputs.cuda().float()) if self.use_gpu else self.model(inputs)
-                        loss = self.criterion(outputs, labels.cuda().long()) if self.use_gpu else self.criterion(outputs, labels)
+                        loss = self.criterion(outputs.cuda(), labels.cuda().long()) if self.use_gpu else self.criterion(outputs, labels)
                         valid_loss += loss.item()
-                        break
-                    print('[%d, %5d] train_loss: %.3f   valid_loss: %.3f' %
-                          (epoch + 1, i + 1,
-                           10000 * running_loss / print_step / len(self.train_data),
-                           10000 * valid_loss / self.valid_data_loader.batch_size))
-                    running_loss = 0
+                        acc = (outputs.cuda().max(1)[1] == labels.cuda()).sum()
+                        valid_acc += acc
+
+                    avg_valid_loss = valid_loss / len(self.valid_data_loader.dataset)
+                    avg_valid_acc = valid_acc / len(self.valid_data_loader.dataset)
+
+            # print
+            print('[%d, %5d] train_loss: %.3f valid_loss: %.3f, train_acc: %.3f valid_acc: %.3f' %
+                  (epoch + 1, i + 1,
+                   10000 * avg_train_loss,
+                   10000 * avg_valid_loss,
+                   10000 * avg_train_acc,
+                   10000 * avg_valid_acc))
 
         print('Finished Trainig')
 
@@ -97,5 +111,5 @@ class FlowerClassifier(object):
         torch.save(self.model.state_dict(), path)
 
 if __name__ == '__main__':
-    fc = FlowerClassifier(False)
-    fc.train()
+    fc = FlowerClassifier(True)
+    fc.train(50)
