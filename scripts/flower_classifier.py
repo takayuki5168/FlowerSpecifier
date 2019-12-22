@@ -18,12 +18,17 @@ class Model(nn.Module):
         self.network.classifier = nn.Sequential(
             nn.Linear(512 * 7 * 7, 4096),
             nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 100)
+            nn.Linear(4096, 25)
             )
+        # self.network.classifier = nn.Sequential(
+        #     nn.Linear(512 * 7 * 7, 4096),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(4096, 4096),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(4096, 100)
+        #     )
 
     def forward(self, x):
         x = self.network(x)
@@ -40,7 +45,7 @@ class FlowerClassifier(object):
         self.train_data = datasets.ImageFolder(root='../dataset/train', transform=data_transform)
         self.train_data_loader = torch.utils.data.DataLoader(self.train_data, batch_size=50, shuffle=True, num_workers=4)
         self.valid_data = datasets.ImageFolder(root='../dataset/validation', transform=data_transform)
-        self.valid_data_loader = torch.utils.data.DataLoader(self.valid_data, batch_size=50, shuffle=True, num_workers=4)
+        self.valid_data_loader = torch.utils.data.DataLoader(self.valid_data, batch_size=100, shuffle=True, num_workers=4)
 
         # init model
         self.model = Model()
@@ -51,13 +56,13 @@ class FlowerClassifier(object):
         self.criterion = nn.CrossEntropyLoss().cuda() if self.use_gpu else nn.CrossEntropyLoss()
 
         # init optimizer
-        #self.optimizer = optim.SGD(self.model.network.classifier.parameters(), lr=0.01, momentum=0.9)
         self.optimizer = optim.Adam(self.model.network.classifier.parameters(), lr=0.01, weight_decay=1e-4)
 
 
     def train(self, epochs=10):
         self.model.train()
 
+        print_step = 3
         for epoch in range(epochs):
             running_loss = 0
             for i, (inputs, labels) in enumerate(self.train_data_loader):
@@ -71,11 +76,20 @@ class FlowerClassifier(object):
                 self.optimizer.step()
 
                 running_loss += loss.item()
-
-                if i % 20 == 19:
-                    print('[%d, %5d] loss: %.3f' %
-                          (epoch + 1, i + 1, running_loss / 2000))
-                    running_loss = 0.0
+                print(i)
+                if i % print_step == print_step - 1:
+                    valid_loss = 0
+                    for j, (inputs, labels) in enumerate(self.valid_data_loader):
+                        self.optimizer.zero_grad()
+                        outputs = self.model(inputs.cuda().float()) if self.use_gpu else self.model(inputs)
+                        loss = self.criterion(outputs, labels.cuda().long()) if self.use_gpu else self.criterion(outputs, labels)
+                        valid_loss += loss.item()
+                        break
+                    print('[%d, %5d] train_loss: %.3f   valid_loss: %.3f' %
+                          (epoch + 1, i + 1,
+                           10000 * running_loss / print_step / len(self.train_data),
+                           10000 * valid_loss / self.valid_data_loader.batch_size))
+                    running_loss = 0
 
         print('Finished Trainig')
 
